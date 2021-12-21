@@ -80,13 +80,13 @@ def configure(conf):
         # that version rather than "14.1" so we'll need to catch that case and
         # fix up the msvc_version accordingly.
         if msvc_version in ["14.1", "14.2"] and sys.version_info >= (3,7):
-            ##msvc_version = '15.0'
+            msvc_version = '15.0'
 
             # On the other hand, microsoft says that v141 and v140 (Visual
             # Studio 2015) are binary compatible, so for now let's just drop
             # it back to "14.0" until I get all the details worked out for
             # using VS 2017+ everywhere for Python 3.7+.
-            msvc_version = '14.0'
+            ##msvc_version = '14.0'
 
         # In some cases (Azure DevOps at least) we're getting "14.1" for Python
         # 3.6 too. Smash it down to '14.0'
