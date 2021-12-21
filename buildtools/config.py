@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import platform
+import tempfile
 
 from distutils.file_util import copy_file
 from distutils.dir_util  import mkpath
@@ -913,6 +914,30 @@ def runcmd(cmd, getOutput=False, echoCmd=True, fatal=True, onError=None):
     return output
 
 
+def runPycode(code, python=None, **kwargs):
+    """
+    Runs the Python code using a given python interpreter (instead of exec-ing), and
+    returns the result from runcmd. The code is written to a temporary file, then
+    runcmd is used to run python on that file. The remaining keyword arguments are
+    passed to runcmd.
+    """
+    if not python and 'PYTHON' in os.environ:
+        python = os.environ['PYTHON']
+    if not python:
+        python = sys.executable
+        python = os.path.abspath(python)
+
+    fd, tempname = tempfile.mkstemp(text=True)
+    try:
+        os.write(fd, code.encode('utf-8'))
+        os.close(fd)
+        output = runcmd('"%s" "%s"' % (python, tempname), **kwargs)
+    finally:
+        os.remove(tempname)
+
+    return output
+
+
 def myExecfile(filename, ns):
     if sys.version_info < (3,):
         execfile(filename, ns)
@@ -948,6 +973,88 @@ def getSipFiles(names):
                 files.append(name)
     return files
 
+
+_getMSVCCompilerCode = """
+import setuptools  # setuptools monkey-patches distutils as needed
+
+def dump_info(msvc):
+    mc = msvc.MSVCCompiler()
+    mc.initialize()
+    info = {
+        '_cc': mc.cc,
+        '_compile_options': mc.compile_options,
+        '_ldflags_shared': mc.ldflags_shared
+    }
+    
+    arch = msvc.PLAT_TO_VCVARS[msvc.get_platform()]
+    if hasattr(msvc, 'query_vcvarsall'):
+        env = msvc.query_vcvarsall(msvc.VERSION, arch)
+    elif hasattr(msvc, '_get_vc_env'):
+        env = msvc._get_vc_env(arch)
+    else:
+        env = {}
+    for key in ('path', 'include', 'lib', 'libpath'):
+        if key in env:
+            info[key] = env[key]
+    
+    for key, val in info.items():
+        if isinstance(val, list):
+            for item in val:
+                print('+{} {}'.format(key, item))
+        else:
+            print('*{} {}'.format(key, val))
+
+err = None
+try:
+    import distutils.msvc9compiler as msvc_old
+    err = dump_info(msvc_old)
+except ImportError:
+    pass
+except Exception as exc:
+    err = exc
+try:
+    import distutils._msvccompiler as msvc_new
+    err = dump_info(msvc_new)
+except ImportError:
+    pass
+except Exception as exc:
+    err = exc
+if err:
+    raise err
+"""
+
+
+def getMSVCCompiler(python=None, quiet=False):
+    """
+    Returns an object that's a proxy with information about the MSVC compiler, obtained by
+    interrogating distutils in the given Python interpreter executable.
+    """
+    class MSVCCompilerProxy:
+        def __init__(self):
+            self.env = {}
+
+        def return_env(self):
+            return self.env
+
+    msvc = MSVCCompilerProxy()
+
+    info_lines = runPycode(_getMSVCCompilerCode, python, getOutput=True, echoCmd=False).splitlines()
+    for line in info_lines:
+        key, val = line.split(' ', 1)
+        if key.startswith('+_'):
+            key = key[2:]
+            if not hasattr(msvc, key):
+                setattr(msvc, key, [])
+            getattr(msvc, key).append(val)
+        elif key.startswith('*_'):
+            setattr(msvc, key[2:], val)
+        elif key.startswith('*'):
+            msvc.env[key[1:]] = val
+
+    if not quiet:
+        msg("MSVC: %s" % msvc.cc)
+
+    return msvc
 
 
 def getVisCVersion():

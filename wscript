@@ -16,7 +16,7 @@ try:
 except ImportError:
     from buildtools.backports.textwrap3 import indent
 
-from buildtools.config import Config, runcmd, msg
+from buildtools.config import Config, runcmd, msg, getMSVCCompiler
 cfg = Config(True)
 
 #-----------------------------------------------------------------------------
@@ -478,9 +478,7 @@ def my_check_python_headers(conf):
         env.append_value('CXXFLAGS_PYEXT', ['-fno-strict-aliasing'])
 
     if env.CC_NAME == "msvc":
-        from distutils.msvccompiler import MSVCCompiler
-        dist_compiler = MSVCCompiler()
-        dist_compiler.initialize()
+        dist_compiler = getMSVCCompiler()
         env.append_value('CFLAGS_PYEXT', dist_compiler.compile_options)
         env.append_value('CXXFLAGS_PYEXT', dist_compiler.compile_options)
         env.append_value('LINKFLAGS_PYEXT', dist_compiler.ldflags_shared)
