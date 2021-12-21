@@ -863,17 +863,20 @@ def dos2bashPath(path):
     # If we have cygwin then we can use cygpath to convert the path.
     # Note that MSYS2 (and Git Bash) now also have cygpath so this should
     # work there too.
-    if cygpath:
-        path = runcmd('"{}" -u "{}"'.format(cygpath, path), getOutput=True, echoCmd=False)
-        return path
-    elif wsl:
-        # Are we using Windows System for Linux? (untested)
-        path = runcmd('"{}" wslpath -a -u "{}"'.format(wsl, path), getOutput=True, echoCmd=False)
-        return path
-    else:
-        # Otherwise, do a simple translate and hope for the best?
+    try:
+        if cygpath:
+            path = runcmd('"{}" -u "{}"'.format(cygpath, path), getOutput=True, echoCmd=False)
+            return path
+        elif wsl:
+            # Are we using Windows System for Linux?
+            # This fails if no distributions are installed on WSL
+            path = runcmd('"{}" wslpath -a -u "{}"'.format(wsl, path), getOutput=True, echoCmd=False)
+            return path
+    finally:
+        # Otherwise, do a simple translate and hope for the best.
         # c:/foo --> /c/foo
-        # TODO: Check this!!
+        # This alternative is taken if bash.exe is available in the path (e.g. from SmartGit),
+        # but cygpath isn't, and there are no distributions installed in WSL
         drive, rest = os.path.splitdrive(path)
         path = '/{}/{}'.format(drive[0], rest)
         return path
